@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "source": "Job_Search_Profiles.md section 2 (hard exclusions). Berlin-based candidate.",
+  "principle": "Be too permissive here, never too strict. A posting wrongly rejected at this stage is never scored, so nobody ever learns it was good - the error is invisible by construction. A posting wrongly passed through costs one Claude scoring call. Rules are ordered: exact structured-field checks first (safe to be strict), prose regexes last (kept narrow). Ambiguous exclusions are deliberately absent - see 'deliberately_not_rules'.",
+
+  "deliberately_not_rules": {
+    "HARD_DEGREE": "Section 2 rejects roles requiring an engineering/CS/hard-science/finance degree. Not regexable: 'degree in a relevant field such as engineering, social sciences or humanities' would match a naive pattern and is a perfect fit. Falls through to Claude.",
+    "HARD_TECHNICAL": "Section 2 rejects coding/SQL/CAD as a core daily function. 'Comfortable with spreadsheets and basic SQL a plus' is not a technical role. Needs judgement; falls through to Claude.",
+    "HARD_GERMAN_ONLY_JD": "Section 2 rejects a German-only JD where the role is German-facing throughout. Two conditions, one of which is about the role rather than the text. Falls through to Claude.",
+    "SOFT_PENALTIES": "'3+ years', named PM methodology, budget ownership, corporate sector etc. are score deductions, not rejections (section 2). They are Claude's job, not this file's."
+  },
+
+  "rules": [
+    {
+      "id": "HARD_FN_ENGINEERING",
+      "where": "title",
+      "action": "reject",
+      "pattern": "\\bengineer|\\bengineering\\b|\\bdeveloper\\b|\\bentwickler|\\bsoftware\\b|(?<!projekt)(?<!geschäfts)entwickl|full[ -]?stack|\\bfrontend\\b|\\bbackend\\b|\\bdevops\\b|site reliability|\\bsre\\b|machine learning|\\bml\\b|data (analyst|scientist|engineer)|system[ -]?admin|sysadmin|\\barchitect\\b|\\bqa\\b|\\bit[- ]lead\\b|technical lead|\\bcto\\b|tiefbau|bauleit|baukoordinator|trafostation|bauingenieur|elektrotechnik|maschinenbau|\\bsps\\b",
+      "note": "Technical function, on the TITLE only. Section 2 rejects coding as a core daily function; rules.json previously left this entirely to Claude, which meant every LiveEO, telli and Wikimedia engineering posting reached the scoring stage every night. Title-only and function-only: a coordination role whose JD merely mentions engineers must not be rejected. German compounds glue words together (Kabelleitungs-tiefbau), so the trade terms carry no leading word boundary. It also covers the German construction and electrical trades (Tiefbau, Bauleitung, Elektrotechnik), which are technical in the same way - Stromnetz Berlin's 'Baukoordinator*in für den Kabelleitungstiefbau' is a cable-laying role, not coordination in the candidate's sense. 'Bauwesen' is deliberately absent: DIN's 'Junior Projektmanager Normung Bauwesen' is a standards-body project role. The lookbehinds keep 'Projektentwicklung' and 'Geschäftsentwicklung', which are climate-project and business-development German, not software, and there is a test for that. 31 Aug: the same employer's 'Baukoordinator*in fuer den Bau von Trafostationen' cleared it - the 29 Aug variant was caught only because it said 'Kabelleitungstiefbau'. 'baukoordinator' is now a term of its own: it is a construction title whatever follows it, and it cannot collide with the candidate's coordinator titles, which never carry a 'bau' prefix glued to the front."
+    },
+    {
+      "id": "HARD_FN_SALES",
+      "where": "title",
+      "action": "reject",
+      "pattern": "\\bsales\\b|\\bvertrieb|account executive|business development|key accounts?\\b|\\btelesales\\b|\\bsdr\\b|sales development|\\bstore manager\\b|revenue operations|\\brevops\\b|sales operations",
+      "note": "Sales function (profile 6 excludes sales-ops and revenue roles explicitly). Revenue and sales operations are named exclusions in profile 6. 'Account Executive' is sales, not assistance - do not confuse it with 'Executive Assistant', which is a target title and is tested here."
+    },
+    {
+      "id": "HARD_FN_MARKETING_SPECIALIST",
+      "where": "title",
+      "action": "reject",
+      "pattern": "^(?!.*(?:communicat|kommunikat|content|redaktion)).*(paid social|\\bseo\\b|\\bcrm\\b|\\bsea\\b|performance marketing|growth marketing|product marketing|brand manager|social media manager)",
+      "note": "Narrow marketing specialisms only. Deliberately NOT a blanket 'marketing' reject: the candidate's profiles include communications and content work, and 'Marketing & Communications Coordinator' is a good fit. The negative lookahead keeps anything mentioning communications, Kommunikation, content or Redaktion."
+    },
+    {
+      "id": "HARD_WORKING_STUDENT_TITLE",
+      "where": "title",
+      "action": "reject",
+      "pattern": "werkstudent|working student|studentische hilfskraft|\\bpraktikant|\\bpflichtpraktikum",
+      "note": "the candidate has graduated, so Werkstudent roles and study-linked internships are legally unavailable (section 1). HARD_EMPLOYMENT_TYPE already catches this on ATS feeds via the structured field - but LinkedIn cards carry no employment_type, so without this title rule every LinkedIn working-student posting passed. A structured check and a title check are not redundant when one source lacks the field."
+    },
+    {
+      "id": "HARD_FN_SCIENCE_LAB",
+      "where": "title",
+      "action": "reject",
+      "pattern": "\\bchemiker|\\bchemist\\b|\\bphysiker|\\bphysicist\\b|\\bbiolog|\\bpharmaz|laborator|\\blaborant|lab technician|\\bfermentation\\b|\\bprotein\\b|\\bmolecular\\b|bioinformat|\\bassay\\b|\\btoxikolog|\\bmikrobiolog|\\bgenom",
+      "note": "Natural-science and laboratory roles. They demand a scientific training the candidate does not have, and no profile covers them - BUND's 'Junior Chemiker*in', Formo's lab technician, fermentation operator and protein-characterisation posts all reached the digest before this rule existed. Deliberately NOT a blanket 'research' reject: 'Research Associate' at a think tank is a genuine fit (interest 5, academia and research institutes), so only the concrete science markers are listed - Formo's 'Research Associate' is caught by 'Protein', not by 'Research'."
+    },
+    {
+      "id": "HARD_FN_ACCOUNTING",
+      "where": "title",
+      "action": "reject",
+      "pattern": "\\baccounting\\b|buchhalt|\\bpayroll\\b|lohnabrechnung|steuerberat|debitoren|kreditoren|rechnungsmanagement|\\bcontrolling\\b|\\bbookkeep",
+      "note": "Profile 6 excludes payroll, bookkeeping and accounting outright - the candidate has no exposure to German administrative finance (DATEV, Elster, Steuerberater). Title-only: an assistant role whose JD mentions handling invoices is not an accounting role, and there is a test for that. 'Kaufmännische Leitung' deliberately still passes; it is an NGO administration role, not bookkeeping."
+    },
+    {
+      "id": "HARD_FN_LEGAL",
+      "where": "title",
+      "action": "reject",
+      "pattern": "\\blegal\\b|\\bjurist|rechtsanwalt|\\bcounsel\\b|\\battorney\\b|\\bnotar",
+      "note": "Legal function. Not in any profile and requires a qualification the candidate does not have."
+    },
+    {
+      "id": "HARD_FN_LOGISTICS",
+      "where": "title",
+      "action": "reject",
+      "pattern": "^(?!.*(?:assisten|assistant|sekret|office manage|empfang|reception)).*(\\blogistics?\\b|\\blogistik|supply chain|fulfil?lment|\\b3pl\\b|\\bwarehouse\\b|\\blager\\b)",
+      "note": "Logistics and supply chain. the candidate's raw list mentions 'logistics' as an interest, but every posting the feeds actually return under that word is warehouse, 3PL or last-mile operations, not coordination. Delete this rule if the candidate wants to see them. The negative lookahead was added after the false-reject audit found 'Assistenz der Geschäftsleitung Logistik' rejected as a logistics role: it is an assistant post at a logistics company, and the company's sector is not the role's function. Same shape as the marketing lookahead."
+    },
+    {
+      "id": "HARD_SENIORITY_TITLE",
+      "where": "title",
+      "action": "reject",
+      "pattern": "\\bsenior\\b|\\bsr\\.?\\b|\\blead\\b|\\bleiter(in)?\\b|head of\\b|\\bdirector\\b|\\bprincipal\\b|\\bvp\\b|\\bteamlead\\b|team lead\\b|\\bgeschäftsführer",
+      "note": "Explicit seniority markers in the title, for a 0-2 years candidate. FOUR deliberate omissions, each of which cost a genuine match when tested: 'Chief' (profile 6 names 'Chief of Staff (junior)' and 'Founder's Associate / Chief of Staff' as targets), 'Leitung' (Falling Walls' 'Co-Leitung von Young Entrepreneurs in Science' is one of the best matches found so far, and DRI's 'Kaufmännische Leitung' is a real NGO admin role), 'Executive' ('Executive Assistant' is a target title), and 'Staff' (it was meant for 'Staff Engineer', which HARD_FN_ENGINEERING already catches, but it also matches 'Chief of Staff'). 'Leadership' does not match \\blead\\b."
+    },
+    {
+      "id": "HARD_UX_RESEARCH",
+      "where": "title",
+      "action": "reject",
+      "pattern": "\\bux research|\\buser research(er)?\\b|\\bux researcher\\b|\\bdesign research(er)?\\b",
+      "note": "Profile doc section 9b excludes UX Research roles, and the pipeline guardrails repeat it. the candidate's own raw list names UX Research as an interest - section 9b is the later, authoritative decision, so this rule follows the profile doc. Title-only and narrow on purpose: a JD that merely mentions 'we work closely with user research' must not be rejected."
+    },
+    {
+      "id": "HARD_LOCATION_NONEU",
+      "where": "location",
+      "action": "reject",
+      "pattern": "united states|\\busa?\\b|u\\.s\\.|canada|australia|new zealand|singapore|japan|korea|\\bindia\\b|brazil|mexico|china|hong kong|dubai|\\buae\\b|israel|south africa|london|united kingdom|\\buk\\b|\\buki\\b",
+      "note": "Non-EU location or non-EU remote (section 1). Must run BEFORE HARD_LOCATION: 'United States, Remote' satisfies a bare 'remote' requirement, so without this rule every US-remote posting passes."
+    },
+    {
+      "id": "HARD_LOCATION",
+      "where": "location",
+      "action": "require",
+      "pattern": "berlin|deutschland|german|europe|\\beu\\b|emea|dach|hybrid|remote",
+      "note": "Berlin on-site/hybrid or EU-remote (section 1). Skipped when the feed gives no location - unknown is not disqualifying. Bare 'remote' passes here only because the non-EU rule above has already run."
+    },
+    {
+      "id": "HARD_EMPLOYMENT_TYPE",
+      "where": "employment_type",
+      "action": "reject",
+      "pattern": "^\\s*(intern|internship|working[ _-]?student|werkstudent)\\s*$",
+      "note": "Exact ATS field. the candidate has graduated, so Werkstudent and enrolment-linked internships are legally unavailable. 'Trainee' is deliberately NOT matched - Volontariat and traineeships are explicitly in scope (profile 2)."
+    },
+    {
+      "id": "HARD_SENIORITY",
+      "where": "seniority",
+      "action": "reject",
+      "pattern": "^\\s*(executive|student)\\s*$",
+      "note": "Exact ATS field (Personio). 'entry' and 'experienced' both pass - many 0-2y roles are tagged 'experienced'."
+    },
+    {
+      "id": "HARD_WERKSTUDENT",
+      "where": "text",
+      "action": "reject",
+      "pattern": "\\bwerkstudent\\w*",
+      "note": "Unambiguous German term. Requires current enrolment."
+    },
+    {
+      "id": "HARD_ENROLLED",
+      "where": "text",
+      "action": "reject",
+      "pattern": "\\bpflichtpraktikum\\b|\\bimmatrikuliert\\b|currently enrolled|must be enrolled|enrolled (at|in) a (university|higher education)",
+      "note": "Requires student status. Excludes Pflichtpraktikum and enrolment-gated Wissenschaftliche Hilfskraft roles."
+    },
+    {
+      "id": "HARD_LANG_DE",
+      "where": "text",
+      "action": "reject",
+      "pattern": "verhandlungssicher\\w*\\s+deutsch|deutsch\\w*\\s+(kenntnisse\\s+)?(auf\\s+)?(c1|c2|niveau\\s+c1|verhandlungssicher\\w*|muttersprach\\w*)|deutsch\\s+als\\s+muttersprache|flie(ss|ß)end\\w*\\s+(in\\s+)?deutsch|muttersprach\\w*\\s+deutsch|(native|fluent|c1|c2)[\\s\\-]*(level\\s+)?german|german[\\s\\-]*(language\\s+)?(skills\\s+)?(at\\s+)?(least\\s+)?(level\\s+)?[\\(\\[]?\\s*(c1|c2|native|mother\\s?tongue)|verhandlungssicher\\w*\\s+(kenntnisse\\s+)?(in\\s+)?(der\\s+)?deutsch\\w*|deutsch\\w*\\s+(kenntnisse\\s+)?(sind|ist)\\s+einwandfrei|einwandfrei\\w*\\s+deutsch\\w*|deutsch\\w*[\\s:\\-]*[\\(\\[]\\s*(c1|c2)\\b",
+      "note": "German at C1 / verhandlungssicher / fließend / einwandfrei / Muttersprache (section 2). the candidate is B2. Deliberately does NOT match 'sehr gute Deutschkenntnisse' or 'good German' - those are arguable at B2 and belong to Claude. Widened 31 Aug after four postings cleared it in one night, all with the level SEPARATED from the word: 'Verhandlungssichere Kenntnisse in deutscher und englischer Sprache' (atmosfair x2), 'Deine Deutschkenntnisse sind einwandfrei' (Fullstop PR), 'German at least C1' (Riverty) and 'German (C2 or Native)' (A11). The filler words are enumerated rather than wildcarded on purpose: a bounded '.{0,20}' between 'German' and 'C1' also matches 'German (B2) or C1 English', which is a posting the candidate CAN do. Same reason 'verhandlungssicher' must be followed by a Deutsch-ish word and not any word within n characters - 'Verhandlungssicheres Englisch, gute Deutschkenntnisse' is a match the candidate would want to keep."
+    },
+    {
+      "id": "HARD_EXP_5Y",
+      "where": "text",
+      "action": "reject",
+      "pattern": "(?<![0-9]-)(?<![0-9] -)(?<![0-9]- )(?<![0-9] - )(?<![0-9]–)(?<![0-9] –)(?<![0-9] bis )(?<![0-9] to )\\b([5-9]|1[0-9])\\s*\\+?\\s*(years?|jahre?n?)\\s+(of\\s+)?(relevant\\s+|professional\\s+|work\\s+|proven\\s+|einschlägige[nrs]?\\s+|relevante[nrs]?\\s+|nachweisliche[nrs]?\\s+|praktische[nrs]?\\s+|fundierte[nrs]?\\s+)?(experience|(?:berufs|projekt|führungs)?erfahrung)|(experience|(?:berufs|projekt|führungs)?erfahrung)[^.\\n]{0,25}(?<![0-9]-)(?<![0-9] -)\\b([5-9]|1[0-9])\\s*\\+\\s*(years?|jahre)|(?<![0-9]-)(?<![0-9] -)(?<![0-9]- )(?<![0-9] - )(?<![0-9]–)(?<![0-9] –)(?<![0-9] bis )(?<![0-9] to )\\b([5-9]|1[0-9])\\s*\\+\\s*(years?|jahre?n?)\\s+(in|as|im|als|within)\\b|(at\\s+least|mindestens|mind\\.|more\\s+than|über)\\s+([5-9]|1[0-9])\\s*\\+?\\s*(years?|jahre?n?)\\s+(in|as|im|als|within)\\b",
+      "note": "5+ years required (section 2). Bound to experience words so '5 years of company history' does not match. The German half was broken until 30 Aug: it matched only 'Berufserfahrung', so 'Mindestens 5 Jahre Erfahrung' - the commoner phrasing - sailed through and a 5-year PMO role reached the digest. It now covers bare Erfahrung, Projekterfahrung and Fuehrungserfahrung, plus the German qualifiers that sit between the number and the noun, and the written-out ranges ('3 bis 5', '3 to 5') alongside the dashed ones. The lookbehinds exclude ranges whose LOWER bound is under 5: '3-5 years' means they would take 3, so it is a soft penalty, not an exclusion. 3-4 years is intentionally outside this range. Widened again 31 Aug: the English half had the SAME shape of bug the German half had, one language over. Formo's '5+ years in B2B marketing' names the field instead of an experience noun, and the backwards branch caps the gap at 25 characters with no newlines, so the 'Education & Experience' heading above it could never reach. 'N+ years in <field>' now counts on its own, and so does an explicit minimum ('at least 5 years in ...', 'mindestens 5 Jahre im ...'). The bare 'N years in' with no plus and no minimum is deliberately NOT matched: 'we have been growing for 5 years in Berlin' is company history, not a requirement."
+    },
+    {
+      "id": "HARD_MGMT",
+      "where": "text",
+      "action": "reject",
+      "pattern": "\\bdirect reports\\b|\\bf(ü|ue)hrungsverantwortung\\b|disziplinarische\\s+f(ü|ue)hrung|(lead|manage|managing|leading)\\s+a\\s+team\\s+of\\s+\\d+",
+      "note": "Line-management responsibility (section 2). Narrow on purpose: 'work with a team', 'lead a project' and 'lead a workstream' must all pass - project leadership is exactly what the candidate wants."
+    },
+    {
+      "id": "HARD_PL",
+      "where": "text",
+      "action": "reject",
+      "pattern": "\\bp&l\\b|profit and loss|umsatzverantwortung|revenue (target|quota|responsibility)|sales quota",
+      "note": "P&L or revenue ownership (section 2)."
+    },
+    {
+      "id": "HARD_REMOTE_NONEU",
+      "where": "text",
+      "action": "reject",
+      "pattern": "authorized to work in the (us|u\\.s\\.|united states)|us[\\s-]based candidates only|(remote\\s*\\(?\\s*)(us|usa|united states)\\s*(only|based)|united states only|must (be located|reside) in the united states",
+      "note": "US-only or non-EU remote (section 2). Narrow: a global company hiring in Berlin often mentions the US harmlessly."
+    }
+  ]
+}

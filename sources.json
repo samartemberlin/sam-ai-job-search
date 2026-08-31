@@ -1,0 +1,99 @@
+{
+  "comment": "Boards to fetch. 'ats' selects the adapter, 'slug' is that ATS's board identifier, 'tier' is the fit tier from Job_Search_Profiles.md section 10. Every entry below was verified on 2026-08-29 by reading the board's actual postings - not merely by the endpoint returning 200. Reachability is not identity: a live board can belong to a different organisation of the same name, or contain a vendor's demo data. See 'rejected' below for the ones that failed that check.",
+
+  "sources": [
+    {"company": "Falling Walls",   "ats": "personio",   "slug": "falling-walls",   "tier": "A"},
+    {"company": "Ecosia",          "ats": "ashby",      "slug": "ecosia.org",      "tier": "A", "verified_empty": "2026-08-30", "note": "Ecosia's real board, confirmed 2026-08-29 from ecosia.org/about/careers. Rev 3's correction was backwards: it found this board empty, assumed the slug was wrong, and switched to personio 'ecosia' - which is an unclaimed account serving demo data. An empty Ashby board is reported as a problem each run, which is the correct loud behaviour. Re-checked 30 Aug 2026 after the watchdog fired twice: ecosia.org/about/careers links to this exact board and it is genuinely empty, so `verified_empty` silences the watchdog for 30 days and then makes it ask again - a slug can still rot later. Note Ashby 404s unknown slugs, so unlike SmartRecruiters a 200 here does mean the board is real."},
+    {"company": "Formo",           "ats": "recruitee",  "slug": "formo",           "tier": "A"},
+    {"company": "Watershed",       "ats": "ashby",      "slug": "watershed",       "tier": "A"},
+    {"company": "LiveEO",          "ats": "personio",   "slug": "liveeo-gmbh",     "tier": "A"},
+
+    {"company": "atmosfair",                          "ats": "personio",  "slug": "atmosfair",             "tier": "A", "added": "2026-08-29", "note": "14 postings, all Berlin, climate project management. Best single addition - Projektmanager Klimaschutzprojekte and Trainee on the Job sit directly on profile 1."},
+    {"company": "BUND",                               "ats": "personio",  "slug": "bund",                  "tier": "A", "added": "2026-08-29", "note": "Berlin, German-language environmental NGO."},
+    {"company": "CORRECTIV",                          "ats": "personio",  "slug": "correctiv",             "tier": "A", "added": "2026-08-29", "note": "Berlin/Bottrop/Bern. Editorial roles - profile 3 and 4 territory."},
+    {"company": "Democracy Reporting International",   "ats": "personio",  "slug": "democracy-reporting",   "tier": "A", "added": "2026-08-29", "note": "Berlin civil-society."},
+    {"company": "ECFR",                               "ats": "personio",  "slug": "ecfr",                  "tier": "A", "added": "2026-08-29", "note": "Berlin + Madrid think tank. Currently one speculative posting only - a real board, thin."},
+    {"company": "ProVeg",                             "ats": "personio",  "slug": "proveg",                "tier": "A", "added": "2026-08-29"},
+    {"company": "Reporter ohne Grenzen",              "ats": "personio",  "slug": "reporter-ohne-grenzen", "tier": "A", "added": "2026-08-29", "note": "Berlin. One open-application posting - real, just not hiring today."},
+    {"company": "share",                              "ats": "recruitee", "slug": "share",                 "tier": "B", "added": "2026-08-29", "note": "Berlin social-impact consumer brand. NOT the ashby 'share' board, which is a telecoms company - see rejected."},
+    {"company": "Too Good To Go",                     "ats": "ashby",     "slug": "toogoodtogo",           "tier": "B", "added": "2026-08-29", "note": "Climate. Large international board; Berlin roles present but a minority, so expect volume before filtering."},
+    {"company": "Wikimedia Foundation",               "ats": "greenhouse","slug": "wikimedia",             "tier": "E", "added": "2026-08-29", "note": "The Foundation, not Wikimedia Deutschland (Berlin), which is on a different system and still unfound. Its postings give location as a bare 'Remote' with no country, so HARD_LOCATION_NONEU cannot fire and 12 of them reach scoring every run - mostly US-based. Demoted to Tier E rather than deleted: it is a genuine Tier-1-sector employer that does occasionally hire in Europe. Revisit if the scoring cost of 12 low-probability postings per night is not worth it."},
+    {"company": "ResearchGate",                       "ats": "lever",     "slug": "researchgate",          "tier": "D", "added": "2026-08-29", "note": "Closes one of the eleven no-feed entries from rev 3. Berlin, but currently engineering and IT only."},
+
+    {"company": "Babbel",          "ats": "ashby",      "slug": "babbel",          "tier": "D"},
+    {"company": "Contentful",      "ats": "greenhouse", "slug": "contentful",      "tier": "D"},
+    {"company": "telli",           "ats": "ashby",      "slug": "telli",           "tier": "D"},
+    {"company": "DeepL",           "ats": "ashby",      "slug": "DeepL",           "tier": "D"},
+    {"company": "Aleph Alpha",     "ats": "ashby",      "slug": "AlephAlpha",      "tier": "D"},
+    {"company": "Juna AI",         "ats": "personio",   "slug": "juna-ai",         "tier": "D"}
+  ],
+
+  "rejected": {
+    "comment": "Boards that returned 200 with well-formed postings and are still not usable. Recorded rather than deleted so nobody re-adds them from a probe next month.",
+    "personio:wwf-deutschland": "UNCLAIMED Personio account, not WWF's board. WWF Deutschland publishes vacancies on its own site (wwf.de/ueber-uns/stellenangebote/stellenangebot/stelle/<slug>) and uses no ATS at all - so no Personio slug will ever be theirs. Rev 3 read this board's three demo postings as WWF's real hiring and built the 'coverage != reachability' principle partly on it.",
+    "personio:adelphi": "UNCLAIMED Personio account, not adelphi's board. adelphi DOES use Personio, on the custom domain careers.adelphi.de (job URLs look like /de/jobposting/<hash>/apply). See pending_egress - that host is not on the whitelist yet.",
+    "personio:ecosia": "UNCLAIMED Personio account. Ecosia is on Ashby at 'ecosia.org' - see sources.",
+    "personio:greenpeace":  "Personio ONBOARDING SAMPLE DATA. Three postings: General Application, SEO Marketing Manager (London), Social Media (Working Student). Identical set to personio:storytel with different posting ids - a real but unconfigured Personio account. pipeline.sample_board_reason() now blocks this class.",
+    "personio:storytel":    "Same Personio sample data as greenpeace.",
+    "personio:germanwatch": "Personio sample data, German locale: Initiativbewerbung (Festanstellung), Social Media (Werkstudent), Teststelle.",
+    "personio:dgap":        "Personio sample data, German locale, offices given as Muenchen.",
+    "ashby:share":          "A different 'share' - telecoms, Nairobi/London/Netherlands. The Berlin share is on Recruitee.",
+    "greenhouse:tomorrow":  "Tomorrow.io, weather/defence, Tel Aviv and US. Not Tomorrow the Hamburg sustainable bank.",
+    "lever:ashoka":         "Genuinely Ashoka, but the global board: Bangalore, Jakarta, Arlington, Milan. Ashoka Deutschland (Berlin) does not publish here. Worth a separate hunt.",
+    "smartrecruiters:springernature": "Genuinely Springer Nature, but all six postings are Pune, India. Their Berlin hiring is published elsewhere."
+  },
+
+  "linkedin": {
+    "enabled": true,
+    "tier": "E",
+    "comment": "The only aggregator source. Cards carry no description, so pipeline.py fetches bodies ONLY for postings that survive the card-level rules - see fetch_linkedin/enrich_descriptions. Automated access is against LinkedIn's terms and the account at risk is the candidate's own, so the caps below are deliberate and should stay low. Tier E because LinkedIn surfaces mostly corporates and agencies (Deloitte, Instaffo, Arup in the first ten results), which sit at the bottom of the Section 1 ranking - it needs a higher score to surface.",
+    "location": "Berlin, Germany",
+    "recency_days": 2,
+    "max_pages_per_query": 2,
+    "max_descriptions_per_run": 40,
+    "delay_seconds": 2,
+    "require_priority_title": true,
+    "priority_titles": [
+      "assistenz", "assistant", "koordinat", "coordinator", "projektmanager",
+      "project manager", "projektassistenz", "founder", "associate", "referent",
+      "office", "operations", "event", "kommunikation", "communications",
+      "programme", "program manager", "werkstudent", "junior", "einsteiger"
+    ],
+    "queries": [
+      "Projektmanager",
+      "Project Coordinator",
+      "Projektassistenz",
+      "Team Assistant",
+      "Founder's Associate",
+      "Programme Coordinator",
+      "Event Manager NGO",
+      "Communications Coordinator",
+      "Operations Assistant"
+    ]
+  },
+
+  "pending_egress": {
+    "comment": "Real boards we cannot reach yet because the host is not on the org egress whitelist. Adding the host is a one-line change in claude.ai -> Organization settings -> Capabilities -> Code execution.",
+    "adelphi": {"host": "careers.adelphi.de", "ats": "personio (custom domain)", "note": "Personio lets a customer serve the board from their own domain, so the *.jobs.personio.de whitelist entry does not cover it. The container currently gets 403 at the proxy, not from adelphi. Once whitelisted, try https://careers.adelphi.de/xml with the existing Personio adapter."}
+  },
+
+  "no_public_feed": {
+    "comment": "Probed 2026-08-29 (two rounds) against Personio, Greenhouse, Ashby, Recruitee, Lever and SmartRecruiters. Recorded explicitly rather than dropped - a watchlist entry that fails quietly is worse than one marked unreachable. Three of these were opened in a session and confirmed to have NO machine-readable feed at all, which is typical of small German NGOs and think tanks - i.e. exactly the candidate's best-fit segment. Reaching them needs an HTML careers-page diff adapter, not a better slug.",
+    "confirmed_no_ats": {
+      "WWF Deutschland": "No ATS. Vacancies are pages on wwf.de itself (ueber-uns/stellenangebote/stellenangebot/stelle/<slug>). Needs the HTML careers-page adapter.",
+      "Hertie School": "Vacancies listed on-page at hertie-school.org/en/jobs; research and faculty applications go by email to researchandfaculty@hertie-school.org.",
+      "GPPi": "Openings are ordinary articles on gppi.net (e.g. part-time researcher, critical technologies, 14 Aug 2026). Applications by email, PDF only.",
+      "Hot or Cool Institute": "No posted openings by default; open application by email to work@hotorcool.org. Index is hotorcool.org/work-with-us/, not /jobs/."
+    },
+    "not_yet_rechecked": [
+      "PIK Potsdam", "tbd.community", "Blinkist", "BookBeat", "Pitch", "Nitrokey", "Cogram"
+    ]
+  },
+
+  "corrections": {
+    "Ecosia": "The handoff listed Ashby slug 'ecosia.org'. That board exists but is empty. Ecosia is actually on Personio as 'ecosia'.",
+    "Sastrify": "Personio slug 'sastrify' returns a valid but empty board. Dropped - Tier E anyway.",
+    "Dataiku": "Dropped. Tier F, and every posting was US or France sales/engineering.",
+    "SmartRecruiters probing": "api.smartrecruiters.com/v1/companies/<anything>/postings returns 200 with totalFound 0 for slugs that do not exist. All twenty feedless-org probes 'succeeded' on it. For that ATS only postings > 0 is evidence a slug is real."
+  }
+}

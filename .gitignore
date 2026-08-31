@@ -1,0 +1,6 @@
+# Run outputs. `out/jd/` holds full job-description text pulled from the boards —
+# it must never be committed to a public repo.
+out/
+__pycache__/
+*.pyc
+known.txt
