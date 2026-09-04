@@ -68,8 +68,10 @@ check("mark_notified is idempotent", L.mark_notified(a2, ["a"]) == 0)
 # lossy markdown rendering. The candidate tracks applications outside this system, so the
 # column, the parser and the field are all removed. Assert their absence: a leftover
 # reader would silently re-introduce a field nothing writes.
-for gone in ("parse_sheet_status", "apply_status_mirror"):
+for gone in ("parse_sheet_status", "apply_status_mirror", "sheet_csv"):
     check(f"{gone} is removed", not hasattr(L, gone))
+# sheet_csv went with the Drive connector: the endpoint takes JSON rows, shaped by
+# sheet_sync.build_chunks. Two row-shapers with one caller is how they drift apart.
 
 # --- sheet projection: one day's catch ------------------------------------------
 YDAY = "2026-09-14"
@@ -77,27 +79,11 @@ todays, _ = L.merge([], [post(url="https://x/new", first_seen=T)], T)
 mixed = todays + [dict(todays[0], url="https://x/old", first_seen=YDAY,
                        last_seen=T, company="Seen Yesterday")]
 
-csv_text = L.sheet_csv(mixed, T)
-header = csv_text.splitlines()[0]
-check("sheet has a header", header.startswith("company,"))
-check("sheet drops the first_seen column", "first_seen" not in header)
-check("sheet drops the status column", "status" not in header)
-
-# The must-NOT case, and the whole reason for the change: `old` was first caught
-# yesterday and is still live on the board, so tonight's run re-saw it and moved its
-# last_seen to today. It must still be absent.
-check("sheet carries today's rows", "https://x/new" in csv_text)
-check("sheet excludes a row first seen yesterday", "https://x/old" not in csv_text)
-check("re-seeing a row today does not put it in today's sheet",
-      "Seen Yesterday" not in csv_text)
-check("sheet body has exactly one row", len(csv_text.strip().splitlines()) == 2)
-
 check("todays_rows keys on first_seen, not last_seen",
       [r["url"] for r in L.todays_rows(mixed, T)] == ["https://x/new"])
-check("a sheet for yesterday holds yesterday's row",
-      "https://x/old" in L.sheet_csv(mixed, YDAY))
-check("a day with no new postings yields a header and nothing else",
-      L.sheet_csv(mixed, "2026-09-13").strip() == header)
+check("todays_rows for yesterday holds yesterday's row",
+      [r["url"] for r in L.todays_rows(mixed, YDAY)] == ["https://x/old"])
+check("a day with no new postings yields nothing", L.todays_rows(mixed, "2026-09-13") == [])
 
 rows3 = todays
 
@@ -229,7 +215,7 @@ rows10, _ = L.merge(unsynced, [post(url="u10", jd_file="2026-09-15_new.md",
 check("unsynced jd name still refreshes", rows10[0]["jd"] == "2026-09-15_new.md")
 check("unsynced row still holds jd_text", rows10[0]["jd_text"] == "fresh text")
 
-TOTAL = 67
+TOTAL = 61
 for f in fails:
     print("FAIL", f)
 print(f"\n{TOTAL - len(fails)}/{TOTAL} passed")

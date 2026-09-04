@@ -36,8 +36,9 @@ when it was reviewed):
     latency, not a posting. `drive_synced` does the same job for the archive step.
 
 This module does the merge and nothing else: no network, no MCP, no credentials. The
-session performs the transport, because pipeline code cannot call MCP tools. The merge
-is the part that can destroy the candidate's work, so it is the part with tests.
+transport is sheet_sync.py, a plain HTTPS POST to the Apps Script endpoint - it no
+longer needs the session, because it is not an MCP call any more. The merge is the
+part that can destroy the candidate's work, so it is the part with tests.
 """
 from __future__ import annotations
 
@@ -55,7 +56,7 @@ DIGEST = "claude/daily/{date}.md"
 # Written by the run. Everything else in a row is either the candidate's or the scorer's.
 MACHINE_FIELDS = ("company", "title", "location", "jd", "tier", "ats", "posted")
 NOTES_TTL_DAYS = 30      # drop the fat field after this
-SHARD_TTL_DAYS = 90      # drop a shard once every row is safely in Drive
+SHARD_TTL_DAYS = 90      # drop a shard once every row is safely archived
 DIGEST_TTL_DAYS = 14
 
 # A LinkedIn description is bought exactly once - the run deliberately never re-buys one
@@ -218,9 +219,6 @@ def prune_jd_text(rows: list[dict], budget: int = JD_HOLD_BUDGET_BYTES) -> dict:
 
 # ------------------------------------------------------------------ projection
 
-SHEET_COLUMNS = ["company", "title", "location", "url", "jd", "score", "notes"]
-
-
 def todays_rows(rows: list[dict], today: str) -> list[dict]:
     """The rows a sheet dated `today` may contain: the ones first seen today.
 
@@ -231,37 +229,6 @@ def todays_rows(rows: list[dict], today: str) -> list[dict]:
     describes its contents.
     """
     return [r for r in rows if (r.get("first_seen") or "") == today]
-
-
-def sheet_csv(rows: list[dict], today: str) -> str:
-    """One day's catch, rebuilt from the ledger.
-
-    Two columns the old sheet had are deliberately absent. `status` was the candidate's; they
-    track applications outside this system now, so a column nothing reads would only
-    invite work that goes nowhere. `first_seen` is the sheet's own title repeated on
-    every row.
-
-    `today` is required, not defaulted: a sheet built for the wrong date is the one
-    error here that produces a plausible-looking file, and this project's bugs have all
-    been well-formed wrong data rather than crashes.
-    """
-    import csv
-    import io
-    buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=SHEET_COLUMNS, extrasaction="ignore",
-                       lineterminator="\n")
-    w.writeheader()
-    for r in sorted(todays_rows(rows, today),
-                    key=lambda x: (x.get("score") is None, -(x.get("score") or 0),
-                                   x.get("company") or "")):
-        w.writerow({
-            "company": r.get("company", ""),
-            "title": r.get("title", ""), "location": r.get("location", ""),
-            "url": r.get("url", ""), "jd": r.get("jd", ""),
-            "score": "" if r.get("score") is None else r["score"],
-            "notes": r.get("notes", ""),
-        })
-    return buf.getvalue()
 
 
 # --------------------------------------------------------------------- digest
@@ -401,10 +368,9 @@ def main() -> int:
     os.makedirs(a.outdir, exist_ok=True)
     open(os.path.join(a.outdir, "ledger.jsonl"), "w", encoding="utf-8").write(
         write_jsonl(rows))
-    open(os.path.join(a.outdir, "sheet.csv"), "w", encoding="utf-8").write(sheet_csv(rows, a.date))
     open(os.path.join(a.outdir, "pending.json"), "w", encoding="utf-8").write(
         json.dumps(pending(rows), ensure_ascii=False, indent=1))
-    # What the Drive step must upload. Each carries its own text, so an archive run can
+    # What sheet_sync.py must upload. Each carries its own text, so an archive can
     # succeed days after the posting was fetched - or after the posting has vanished.
     open(os.path.join(a.outdir, "held.json"), "w", encoding="utf-8").write(
         json.dumps(held_descriptions(rows), ensure_ascii=False, indent=1))

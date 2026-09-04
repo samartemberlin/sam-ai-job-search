@@ -24,6 +24,9 @@ python3 pipeline.py                  # fetch every source, filter, write out/
 python3 pipeline.py --source Ecosia  # a single company
 python3 pipeline.py --offline        # re-filter out/raw.json without refetching
 python3 test_rules.py                # rule regression tests
+
+# stage 7, after ledger.py has written out/ledger.jsonl:
+APPS_SCRIPT_URL=... python3 sheet_sync.py --ledger out/ledger.jsonl --date <today>
 ```
 
 Outputs, all gitignored:
@@ -33,6 +36,8 @@ Outputs, all gitignored:
 | `out/raw.json` | everything fetched, pre-filter — replay input for `--offline` |
 | `out/postings.json` | normalized and filtered; each row carries `rejected_by` |
 | `out/jd/*.md` | one archived job description per posting |
+| `out/ledger.jsonl` | the merged ledger; `sheet_sync.py` rewrites it in place |
+| `out/held.json` | descriptions not yet archived — what `sheet_sync.py` uploads |
 
 `out/jd/` exists because postings vanish. By the time the candidate looks at a shortlist a week later,
 some URLs are dead — the archived text is what survives. The descriptions arrive inside the
@@ -46,6 +51,11 @@ same feed response as the listings, so this costs no extra requests.
 - **`rules.json`** — the hard exclusions, as data. Ordered: exact structured-field checks
   first, prose regexes last.
 - **`pipeline.py`** — adapters, normalization, dedup, rule engine.
+- **`ledger.py`** — the merge. No network, no credentials.
+- **`sheet_sync.py`** — the only file here that talks to Google: one HTTPS POST to an
+  Apps Script endpoint that writes a monthly spreadsheet (a tab per day) and a
+  `YYYY-MM-JD/` Drive folder of archived descriptions. The endpoint URL is the
+  credential, so it is read from `APPS_SCRIPT_URL` and never appears in this repo.
 - **`test_rules.py`** — regression tests for every rule.
 
 ## Adding a source
