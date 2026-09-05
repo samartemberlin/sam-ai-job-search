@@ -51,8 +51,12 @@
  * the client must parse it, and must follow the 302 to googleusercontent.com.
  *
  * ── Layout ──────────────────────────────────────────────────────────────────
- * One spreadsheet per month ("Job Pipeline — YYYY-MM"), one tab per day
- * ("YYYY-MM-DD"). Month → spreadsheet ID cached in PropertiesService.
+ * Everything lives under one Drive folder this script itself creates and
+ * owns ("Sam - Job Pipeline", cached as root_folder_id) — required under the
+ * drive.file scope, which cannot see a folder made by hand in the Drive UI.
+ * One spreadsheet per month ("Jobs-YYYY-MM"), one tab per day ("YYYY-MM-DD"),
+ * plus one JD archive folder per month ("JD-YYYY-MM"), all nested inside the
+ * root folder. Month → spreadsheet/folder ID cached in PropertiesService.
  *
  * Expects a POST body:
  * {
@@ -439,6 +443,33 @@ function existingUrls(sheet) {
 
 // ── Storage helpers ─────────────────────────────────────────────────────────
 
+// Everything this script writes lives under one root folder, itself created
+// (not just referenced) by this script — required under the drive.file
+// scope, which only ever sees files/folders the script itself created.
+// A folder made by hand in the Drive UI is invisible to DriveApp.getFolderById
+// here, no matter its ID: drive.file grants nothing over it. Cached once in
+// Script Properties, same pattern as ss_YYYY-MM and jd_folder_YYYY-MM below.
+function getOrCreateRootFolder() {
+  var props = PropertiesService.getScriptProperties();
+  var key = 'root_folder_id';
+  var id = props.getProperty(key);
+
+  if (id) {
+    try {
+      return DriveApp.getFolderById(id);
+    } catch (err) {
+      logErr('getFolderById failed for ' + key + ' (' + id + '): ' + err +
+             ' — NOT recreating. If the folder is genuinely gone, delete the "' +
+             key + '" script property by hand.');
+      throw new Error('root_folder_unavailable');
+    }
+  }
+
+  var folder = DriveApp.createFolder('Sam - Job Pipeline');
+  props.setProperty(key, folder.getId());
+  return folder;
+}
+
 function getOrCreateMonthSpreadsheet(month) {
   var props = PropertiesService.getScriptProperties();
   var key = 'ss_' + month;
@@ -461,6 +492,7 @@ function getOrCreateMonthSpreadsheet(month) {
   }
 
   var ss = SpreadsheetApp.create('Jobs-' + month);
+  DriveApp.getFileById(ss.getId()).moveTo(getOrCreateRootFolder());
   props.setProperty(key, ss.getId());
   return ss;
 }
@@ -531,9 +563,10 @@ function getJdFolder(month, createIfMissing) {
 
   // Was DriveApp.getRootFolder().createFolder(...). getRootFolder() reads a
   // folder this script did not create, which is the one call that breaks under
-  // the drive.file scope. Creating with no parent lands in My Drive root
-  // anyway. Better still: put a fixed parent folder ID in Script Properties.
-  var folder = DriveApp.createFolder('JD-' + month);
+  // the drive.file scope. Nested under the script's own root folder (see
+  // getOrCreateRootFolder) rather than created at My Drive's top level, so
+  // every JD-YYYY-MM folder lands next to its month's spreadsheet.
+  var folder = getOrCreateRootFolder().createFolder('JD-' + month);
   props.setProperty(key, folder.getId());
   return folder;
 }
