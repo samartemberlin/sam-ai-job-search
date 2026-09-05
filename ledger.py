@@ -34,6 +34,12 @@ when it was reviewed):
     explicit flag they would be deduped away and the candidate would never learn they existed -
     and it would look exactly like a quiet job market. A crashed run must cost a day of
     latency, not a posting. `drive_synced` does the same job for the archive step.
+  * THE KNOWN-URL INDEX (`claude/state/known-urls.jsonl`, added 4 Sep) IS A CACHE, NOT A
+    SHARD. `--ledger` only ever needs the CURRENT month's shard now - nightly dedupe
+    reads this small `{url, d}`-only index instead of the last 3 months of full rows.
+    See TOKEN_BUDGET.md section 3 for the token cost this replaced. If the index and a
+    retained shard ever disagree, the shard wins; `rebuild_known_index` regenerates the
+    index from shards alone and is meant for that repair, not for nightly use.
 
 This module does the merge and nothing else: no network, no MCP, no credentials. The
 transport is sheet_sync.py, a plain HTTPS POST to the Apps Script endpoint - it no
@@ -100,8 +106,13 @@ def shard_path(date: str) -> str:
 
 
 def shards_to_read(today: str, months: int = 3) -> list[str]:
-    """Dedupe only needs recent shards: ATS feeds carry live postings only, so
-    something that vanished months ago cannot come back as a duplicate."""
+    """Retained for the one thing it's still right for: naming which shards
+    COMPACTION and a from-scratch rebuild of the known-url index (see
+    `known_index_from_rows`/`rebuild_known_index`) touch. It is NOT the nightly dedupe
+    path any more - see the module docstring's "known-url index" note and
+    TOKEN_BUDGET.md section 3. Dedupe only needs recent shards in the first place
+    because ATS feeds carry live postings only, so something that vanished months ago
+    cannot come back as a duplicate."""
     y, m = int(today[:4]), int(today[5:7])
     out = []
     for _ in range(months):
@@ -348,12 +359,82 @@ def compact(rows: list[dict], today: str) -> tuple:
     return keep, {"dropped": dropped, "notes_trimmed": trimmed}
 
 
+# ------------------------------------------------------------- known-url index
+
+KNOWN = "claude/state/known-urls.jsonl"
+
+# TOKEN_BUDGET.md section 3: the nightly dedupe read used to be the last 3 monthly
+# shards - full survivor rows, notes and all - purely to build a plain url list for
+# pipeline.py's `--known`. That is the whole content this index exists to replace.
+# `--known` only ever wanted urls (see pipeline.py: `known_urls = {l.strip() for l in
+# open(args.known)}`), so this file holds only `{url, d}` per row - no notes, no
+# score, no jd path, no hash: a plain url is already the key pipeline.py and this
+# module both use, so hashing it would only add a lookup step nothing needs.
+#
+# It is a CACHE, not a second source of truth: every entry here also exists in some
+# retained shard, `d` is that row's `first_seen`, and `rebuild_known_index` can always
+# regenerate it from the shards alone. If the two ever disagree, the shard is right -
+# see RUNBOOK.md section 6.
+
+def known_index_from_rows(rows: list[dict]) -> list[dict]:
+    """{url, d} for every row that has one, first occurrence wins."""
+    seen: dict[str, dict] = {}
+    for r in rows:
+        url = r.get("url")
+        if url and url not in seen:
+            seen[url] = {"url": url, "d": r.get("first_seen") or ""}
+    return list(seen.values())
+
+
+def merge_known_index(existing_index: list[dict], rows: list[dict], today: str) -> list[dict]:
+    """Fold this run's ledger rows into the cumulative index. An existing entry's `d`
+    never moves, matching `first_seen` on the row it was derived from."""
+    idx = {r["url"]: r for r in existing_index if r.get("url")}
+    for r in rows:
+        url = r.get("url")
+        if url and url not in idx:
+            idx[url] = {"url": url, "d": r.get("first_seen") or today}
+    return sorted(idx.values(), key=lambda r: r["d"])
+
+
+def prune_known_index(index: list[dict], today: str, ttl_days: int = SHARD_TTL_DAYS) -> list[dict]:
+    """Same TTL as `compact()` uses for shards, so the index tracks what's actually
+    still retained rather than growing forever."""
+    t = dt.date.fromisoformat(today)
+    out = []
+    for r in index:
+        try:
+            age = (t - dt.date.fromisoformat(r.get("d") or today)).days
+        except ValueError:
+            age = 0
+        if age <= ttl_days:
+            out.append(r)
+    return out
+
+
+def known_index_to_url_list(index: list[dict]) -> list[str]:
+    """The plain one-url-per-line shape `pipeline.py --known` already reads."""
+    return [r["url"] for r in index if r.get("url")]
+
+
+def rebuild_known_index(all_shard_rows: list[dict], today: str,
+                        ttl_days: int = SHARD_TTL_DAYS) -> list[dict]:
+    """Rebuild the index from scratch from every row in every retained shard, rather
+    than trusting the incremental append. For weekly compaction, as a drift check -
+    the nightly path is merge_known_index, not this."""
+    return prune_known_index(known_index_from_rows(all_shard_rows), today, ttl_days)
+
+
 # ---------------------------------------------------------------------- cli
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="merge a run into the ledger")
     ap.add_argument("--postings", default="out/postings.json")
     ap.add_argument("--ledger", help="existing shard(s), concatenated jsonl")
+    ap.add_argument("--known-index",
+                     help="existing claude/state/known-urls.jsonl, if any. Only this "
+                          "month's shard needs to go in --ledger now - see "
+                          "TOKEN_BUDGET.md section 3 and RUNBOOK.md section 4")
     ap.add_argument("--outdir", default="out")
     ap.add_argument("--date", default=dt.date.today().isoformat())
     a = ap.parse_args()
@@ -365,6 +446,12 @@ def main() -> int:
     rows, comp = compact(rows, a.date)
     hold = prune_jd_text(rows)
 
+    existing_index = read_jsonl(
+        open(a.known_index, encoding="utf-8").read()
+        if a.known_index and os.path.exists(a.known_index) else "")
+    index = merge_known_index(existing_index, rows, a.date)
+    index = prune_known_index(index, a.date)
+
     os.makedirs(a.outdir, exist_ok=True)
     open(os.path.join(a.outdir, "ledger.jsonl"), "w", encoding="utf-8").write(
         write_jsonl(rows))
@@ -374,9 +461,16 @@ def main() -> int:
     # succeed days after the posting was fetched - or after the posting has vanished.
     open(os.path.join(a.outdir, "held.json"), "w", encoding="utf-8").write(
         json.dumps(held_descriptions(rows), ensure_ascii=False, indent=1))
+    # known-urls.jsonl: what gets written back to the project (local_path, no retype
+    # cost). known.txt: the plain url-per-line shape tomorrow's `pipeline.py --known`
+    # reads - also written tonight so a same-night rerun of pipeline.py sees it too.
+    open(os.path.join(a.outdir, "known-urls.jsonl"), "w", encoding="utf-8").write(
+        write_jsonl(index))
+    open(os.path.join(a.outdir, "known.txt"), "w", encoding="utf-8").write(
+        "\n".join(known_index_to_url_list(index)) + ("\n" if index else ""))
     print(f"{stats['added']} new, {stats['refreshed']} refreshed, {stats['total']} total; "
           f"{len(pending(rows))} awaiting a digest; compaction {comp}; "
-          f"held descriptions {hold}")
+          f"held descriptions {hold}; known-url index {len(index)}")
     return 0
 
 

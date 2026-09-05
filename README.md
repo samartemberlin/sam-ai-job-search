@@ -20,14 +20,23 @@ consume what this one emits.
 ## Run
 
 ```sh
-python3 pipeline.py                  # fetch every source, filter, write out/
-python3 pipeline.py --source Ecosia  # a single company
-python3 pipeline.py --offline        # re-filter out/raw.json without refetching
-python3 test_rules.py                # rule regression tests
+python3 pipeline.py --known out/known.txt   # fetch every source, filter, write out/
+python3 pipeline.py --source Ecosia         # a single company
+python3 pipeline.py --offline               # re-filter out/raw.json without refetching
+python3 test_rules.py                       # rule regression tests
 
-# stage 7, after ledger.py has written out/ledger.jsonl:
+# stage 7 - merge this run into the current month's shard and refresh the dedupe index:
+python3 ledger.py --postings out/postings.json --ledger <this-month's-shard-local-copy> \
+    --known-index <known-urls.jsonl-local-copy> --date <today>
+# then, after ledger.py has written out/ledger.jsonl:
 APPS_SCRIPT_URL=... python3 sheet_sync.py --ledger out/ledger.jsonl --date <today>
 ```
+
+`--known`/`--known-index` want the CURRENT LOCAL COPY of `claude/state/known-urls.jsonl`
+(project doc) — the whole reason this file exists is that the caller (the nightly run,
+orchestrated outside this repo per RUNBOOK.md section 4) no longer needs to fetch and
+re-read the last 2-3 months of full shards just to build a url list. See
+`ledger.py`'s "known-url index" section and TOKEN_BUDGET.md section 3.
 
 Outputs, all gitignored:
 
@@ -36,8 +45,10 @@ Outputs, all gitignored:
 | `out/raw.json` | everything fetched, pre-filter — replay input for `--offline` |
 | `out/postings.json` | normalized and filtered; each row carries `rejected_by` |
 | `out/jd/*.md` | one archived job description per posting |
-| `out/ledger.jsonl` | the merged ledger; `sheet_sync.py` rewrites it in place |
+| `out/ledger.jsonl` | the merged **current-month shard only**; `sheet_sync.py` rewrites it in place |
 | `out/held.json` | descriptions not yet archived — what `sheet_sync.py` uploads |
+| `out/known-urls.jsonl` | the refreshed cumulative dedupe index (`{url, d}`, all retained months) — written back to `claude/state/known-urls.jsonl` |
+| `out/known.txt` | the same index as one url per line — what `pipeline.py --known` reads next run |
 
 `out/jd/` exists because postings vanish. By the time the candidate looks at a shortlist a week later,
 some URLs are dead — the archived text is what survives. The descriptions arrive inside the

@@ -160,6 +160,37 @@ check("shards wrap the year", L.shards_to_read("2026-01-15") ==
 check("shard path from date", L.shard_path("2026-09-15") ==
       "claude/state/postings-2026-09.jsonl")
 
+# --- known-url index (4 Sep: replaces reading 3 months of full shards nightly) ---
+idx0 = L.known_index_from_rows(rows3)
+check("index has no notes/score/jd fields", set(idx0[0]) == {"url", "d"})
+check("index url matches the source row", idx0[0]["url"] == rows3[0]["url"])
+
+grown = L.merge_known_index(idx0, [dict(url="new-url", first_seen="2026-09-16")], "2026-09-16")
+check("merging adds a genuinely new url", any(r["url"] == "new-url" for r in grown))
+check("merge grows by exactly the new urls", len(grown) == len(idx0) + 1)
+regrown = L.merge_known_index(grown, [dict(url="new-url", first_seen="2026-09-17")], "2026-09-17")
+check("merge does not move an existing entry's date",
+      next(r for r in regrown if r["url"] == "new-url")["d"] == "2026-09-16")
+check("merge does not duplicate an existing url", len(regrown) == len(grown))
+
+old_entry = [{"url": "stale", "d": "2026-01-01"}, {"url": "fresh", "d": "2026-09-01"}]
+pruned = L.prune_known_index(old_entry, "2026-09-15")
+check("pruning drops entries past the shard TTL", {r["url"] for r in pruned} == {"fresh"})
+check("pruning uses the same TTL as shard compaction",
+      L.prune_known_index(old_entry, "2026-09-15", ttl_days=999) == old_entry)
+
+check("index-to-url-list is plain urls, the shape pipeline.py --known reads",
+      L.known_index_to_url_list([{"url": "a", "d": "x"}, {"url": "b", "d": "y"}]) == ["a", "b"])
+check("a url-less row cannot poison the index",
+      L.known_index_from_rows([{"first_seen": "2026-09-01"}]) == [])
+
+rebuilt = L.rebuild_known_index(
+    rows3 + [dict(rows3[0], url="stale2", first_seen="2026-01-01")], "2026-09-15")
+check("rebuild applies the TTL like the incremental path does",
+      "stale2" not in {r["url"] for r in rebuilt})
+check("rebuild is a pure function of the shards, not the old index",
+      {r["url"] for r in rebuilt} == {r["url"] for r in L.known_index_from_rows(rows3)})
+
 # --- watchdogs ---------------------------------------------------------------
 check("no-run watchdog fires", any("schedule" in w for w in L.watchdogs(
     [{"date": "2026-09-10"}], T)))
@@ -215,7 +246,7 @@ rows10, _ = L.merge(unsynced, [post(url="u10", jd_file="2026-09-15_new.md",
 check("unsynced jd name still refreshes", rows10[0]["jd"] == "2026-09-15_new.md")
 check("unsynced row still holds jd_text", rows10[0]["jd_text"] == "fresh text")
 
-TOTAL = 61
+TOTAL = 73  # +12 for the known-url index (4 Sep, TOKEN_BUDGET.md section 3)
 for f in fails:
     print("FAIL", f)
 print(f"\n{TOTAL - len(fails)}/{TOTAL} passed")
