@@ -65,8 +65,12 @@ same feed response as the listings, so this costs no extra requests.
 - **`ledger.py`** — the merge. No network, no credentials.
 - **`sheet_sync.py`** — the only file here that talks to Google: one HTTPS POST to an
   Apps Script endpoint that writes a monthly spreadsheet (a tab per day) and a
-  `YYYY-MM-JD/` Drive folder of archived descriptions. The endpoint URL is the
+  `JD-YYYY-MM/` Drive folder of archived descriptions. The endpoint URL is the
   credential, so it is read from `APPS_SCRIPT_URL` and never appears in this repo.
+- **`apps-script/`** — the endpoint's source, uploaded **by hand** to the Apps Script web
+  editor (it does not deploy from this repo): `Code.gs` plus `appscript.json`, the manifest,
+  which pins the OAuth scopes (full `drive` + `spreadsheets`) and the V8 runtime and must be
+  deployed with it. Deployment, scopes and debugging: `apps-script/README.md`.
 - **`test_rules.py`** — regression tests for every rule.
 
 ## Adding a source
