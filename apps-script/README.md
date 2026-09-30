@@ -40,11 +40,13 @@ First time:
 1. Create a **standalone** Apps Script project (not one opened from a spreadsheet's
    Extensions menu — a container-bound script is deleted along with its spreadsheet).
 2. Paste `Code.gs` and `appscript.json` as above.
-3. Optional: to keep files in an existing Drive folder, add the Script Property
-   `root_folder_id` = that folder's ID (Project Settings → Script Properties). Otherwise the
-   script creates its own root folder on first write.
+3. Set the Script Property `root_folder_id` (Project Settings → Script Properties) to the ID of
+   the Drive folder everything should live in. **The script never creates this folder during a
+   request** — without the property every write fails with `internal`, by design (a missing
+   property once produced a second, same-named folder). On a fresh install with no folder yet,
+   run `setupRootFolder()` once from the editor instead; it creates one and sets the property.
 4. Run `diagnose` once from the editor and approve the permission prompt. The Execution log
-   should print `OK: JD-… in <folder url>`.
+   should print the root folder's URL and `OK: JD-… in <the same folder url>`.
 5. Deploy → New deployment → Web app. The URL it gives is the endpoint; store it as
    `APPS_SCRIPT_URL` (outside this repo).
 
@@ -58,7 +60,7 @@ creating a new one mints a new URL.
 One root folder containing, per month, a spreadsheet `Jobs-YYYY-MM` (a tab per day,
 `YYYY-MM-DD`) and a JD archive folder `JD-YYYY-MM` (one `.md` per posting). Month → spreadsheet
 and folder IDs are cached in Script Properties (`ss_YYYY-MM`, `jd_folder_YYYY-MM`,
-`root_folder_id`). The script refuses to recreate storage when a cached ID stops resolving —
+`root_folder_id`). The script refuses to create or recreate storage when a cached ID is missing or stops resolving —
 delete the stale property by hand if the object is really gone.
 
 ## Debugging

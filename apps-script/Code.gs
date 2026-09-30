@@ -53,10 +53,11 @@
  * the client must parse it, and must follow the 302 to googleusercontent.com.
  *
  * ── Layout ──────────────────────────────────────────────────────────────────
- * Everything lives under one Drive folder this script itself creates and
- * owns ("Sam - Job Pipeline", cached as root_folder_id). An existing folder
- * can be adopted instead by setting the root_folder_id Script Property to its
- * ID before the first write (works with the full `drive` scope).
+ * Everything lives under ONE existing Drive folder, named by the
+ * root_folder_id Script Property. A web request never creates it: a missing
+ * property once made the script silently create a second folder with the same
+ * name. Set the property before the first write (fresh install: run
+ * setupRootFolder() once by hand, see README.md).
  * One spreadsheet per month ("Jobs-YYYY-MM"), one tab per day ("YYYY-MM-DD"),
  * plus one JD archive folder per month ("JD-YYYY-MM"), all nested inside the
  * root folder. Month → spreadsheet/folder ID cached in PropertiesService.
@@ -446,29 +447,27 @@ function existingUrls(sheet) {
 
 // ── Storage helpers ─────────────────────────────────────────────────────────
 
-// Everything this script writes lives under one root folder. By default the
-// script creates it; to adopt an existing folder, set the root_folder_id
-// Script Property to its ID before the first write. Cached once in Script
-// Properties, same pattern as ss_YYYY-MM and jd_folder_YYYY-MM below.
-function getOrCreateRootFolder() {
-  var props = PropertiesService.getScriptProperties();
-  var key = 'root_folder_id';
-  var id = props.getProperty(key);
-
-  if (id) {
-    try {
-      return DriveApp.getFolderById(id);
-    } catch (err) {
-      logErr('getFolderById failed for ' + key + ' (' + id + '): ' + err +
-             ' — NOT recreating. If the folder is genuinely gone, delete the "' +
-             key + '" script property by hand.');
-      throw new Error('root_folder_unavailable');
-    }
+// Everything this script writes lives under ONE root folder, named by the
+// root_folder_id Script Property. A web request never creates it: a missing
+// property used to make the script silently create a second folder with the
+// same name (30 Sep 2026), splitting a month's files across two folders. Fail
+// instead. Same refuse-to-recreate policy as ss_YYYY-MM and jd_folder_YYYY-MM.
+function getRootFolder() {
+  var id = PropertiesService.getScriptProperties().getProperty('root_folder_id');
+  if (!id) {
+    logErr('root_folder_id Script Property is not set - refusing to create a ' +
+           'second root folder. Set it to the existing folder\'s ID (fresh ' +
+           'install: run setupRootFolder() once by hand).');
+    throw new Error('root_folder_not_configured');
   }
-
-  var folder = DriveApp.createFolder('Sam - Job Pipeline');
-  props.setProperty(key, folder.getId());
-  return folder;
+  try {
+    return DriveApp.getFolderById(id);
+  } catch (err) {
+    logErr('getFolderById failed for root_folder_id (' + id + '): ' + err +
+           ' - NOT recreating. If the folder is genuinely gone, fix the ' +
+           '"root_folder_id" script property by hand.');
+    throw new Error('root_folder_unavailable');
+  }
 }
 
 function getOrCreateMonthSpreadsheet(month) {
@@ -493,7 +492,7 @@ function getOrCreateMonthSpreadsheet(month) {
   }
 
   var ss = SpreadsheetApp.create('Jobs-' + month);
-  DriveApp.getFileById(ss.getId()).moveTo(getOrCreateRootFolder());
+  DriveApp.getFileById(ss.getId()).moveTo(getRootFolder());
   props.setProperty(key, ss.getId());
   return ss;
 }
@@ -562,25 +561,40 @@ function getJdFolder(month, createIfMissing) {
 
   if (!createIfMissing) return null;
 
-  // Nested under the root folder (see getOrCreateRootFolder) rather than
+  // Nested under the root folder (see getRootFolder) rather than
   // created at My Drive's top level, so every JD-YYYY-MM folder lands next to
   // its month's spreadsheet.
-  var folder = getOrCreateRootFolder().createFolder('JD-' + month);
+  var folder = getRootFolder().createFolder('JD-' + month);
   props.setProperty(key, folder.getId());
   return folder;
 }
 
 // ── Diagnostics ─────────────────────────────────────────────────────────────
 
+// Run by hand, once, on a FRESH install only (no existing folder to adopt).
+// Never called by doPost. On an existing install set the root_folder_id Script
+// Property to the existing folder's ID instead.
+function setupRootFolder() {
+  var props = PropertiesService.getScriptProperties();
+  var existing = props.getProperty('root_folder_id');
+  if (existing) { Logger.log('Already set: ' + existing); return; }
+  var f = DriveApp.createFolder('Job Pipeline');
+  props.setProperty('root_folder_id', f.getId());
+  Logger.log('Created ' + f.getUrl());
+}
+
 // Run by hand from the editor (function dropdown -> Run); never called by
 // doPost. Exercises the Drive path that a rows-only write does not touch, and
 // prints the failure instead of the opaque "internal" a caller would see. It
 // creates the JD-2026-09 folder if missing, which the first real write would
-// do anyway. Change the month as needed.
+// do anyway. Change the month as needed. Logs the root folder in use and the
+// parent of the JD folder - these must be the same folder.
 function diagnose() {
   try {
+    var root = getRootFolder();
     var f = getJdFolder('2026-09', true);
-    Logger.log('OK: ' + f.getName() + ' in ' + getOrCreateRootFolder().getUrl());
+    Logger.log('root: ' + root.getUrl());
+    Logger.log('OK: ' + f.getName() + ' in ' + f.getParents().next().getUrl());
   } catch (e) {
     Logger.log('FAIL: ' + e);
   }
