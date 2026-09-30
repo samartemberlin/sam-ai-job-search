@@ -35,7 +35,12 @@ from ledger import (read_jsonl, write_jsonl, todays_rows, held_descriptions,
 # the URL's own ~300-bit entropy). This repo is public, so it must never be a
 # literal here. Supplied at runtime by whatever invokes this script.
 APPS_SCRIPT_URL = os.environ.get("APPS_SCRIPT_URL")
-TIMEOUT = 30
+# Per-request timeout. A request carrying a full batch (20 JD files plus the day's
+# rows) takes the endpoint well over 30 s - it creates or updates one Drive file
+# per JD - and a client that gives up first reports "internal" for a write that
+# was in fact succeeding. Measured 30 Sep 2026: one file ~5 s, a 20-file chunk
+# did not finish inside 30 s. Apps Script's own hard limit is 6 minutes.
+TIMEOUT = 150
 
 # Mirror of the endpoint's own caps. It rejects an over-cap payload WHOLE - one
 # oversized batch loses the night - so the splitting happens here.
