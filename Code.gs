@@ -570,3 +570,13 @@ function getJdFolder(month, createIfMissing) {
   props.setProperty(key, folder.getId());
   return folder;
 }
+
+
+function diagnose() {
+  try {
+    var f = getJdFolder('2026-09', true);
+    Logger.log('OK: ' + f.getName() + ' in ' + getOrCreateRootFolder().getUrl());
+  } catch (e) {
+    Logger.log('FAIL: ' + e);
+  }
+}
