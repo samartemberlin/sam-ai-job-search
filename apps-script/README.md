@@ -58,10 +58,16 @@ creating a new one mints a new URL.
 ## Storage layout
 
 One root folder containing, per month, a spreadsheet `Jobs-YYYY-MM` (a tab per day,
-`YYYY-MM-DD`) and a JD archive folder `JD-YYYY-MM` (one `.md` per posting). Month → spreadsheet
-and folder IDs are cached in Script Properties (`ss_YYYY-MM`, `jd_folder_YYYY-MM`,
-`root_folder_id`). The script refuses to create or recreate storage when a cached ID is missing or stops resolving —
-delete the stale property by hand if the object is really gone.
+`YYYY-MM-DD`) and a JD archive folder `JD-YYYY-MM` (one `.md` per posting). The script **finds
+them by name inside the root folder on every write** and creates them there only if missing, so
+there is no ID cache to go stale. Two consequences: **do not rename them or move them out of the
+root folder** (the script would create new ones), and if a stray duplicate appears the script
+uses the oldest and logs a warning.
+
+Script Properties: only `root_folder_id` (set by you, see above) and `rl_day_YYYY-MM-DD` (the
+daily request counter, managed by the script). Any old `ss_YYYY-MM` / `jd_folder_YYYY-MM`
+properties are ignored and can be deleted. The script never creates the root folder during a
+request; if `root_folder_id` is missing or stops resolving, writes fail with `internal`.
 
 ## Debugging
 

@@ -60,7 +60,12 @@
  * setupRootFolder() once by hand, see README.md).
  * One spreadsheet per month ("Jobs-YYYY-MM"), one tab per day ("YYYY-MM-DD"),
  * plus one JD archive folder per month ("JD-YYYY-MM"), all nested inside the
- * root folder. Month → spreadsheet/folder ID cached in PropertiesService.
+ * root folder. The month's spreadsheet and JD folder are FOUND BY NAME inside
+ * the root folder on every write (nothing is cached by ID), and created there
+ * if missing. Do not rename them or move them out of the root folder: the
+ * script would not find them and would create new ones.
+ * Script Properties in use: root_folder_id (config) and rl_day_YYYY-MM-DD
+ * (request counter). Old ss_YYYY-MM / jd_folder_YYYY-MM properties are ignored.
  *
  * Expects a POST body:
  * {
@@ -451,7 +456,8 @@ function existingUrls(sheet) {
 // root_folder_id Script Property. A web request never creates it: a missing
 // property used to make the script silently create a second folder with the
 // same name (30 Sep 2026), splitting a month's files across two folders. Fail
-// instead. Same refuse-to-recreate policy as ss_YYYY-MM and jd_folder_YYYY-MM.
+// instead. (The month's spreadsheet and JD folder are looked up by name under
+// this folder, see below.)
 function getRootFolder() {
   var id = PropertiesService.getScriptProperties().getProperty('root_folder_id');
   if (!id) {
@@ -470,30 +476,39 @@ function getRootFolder() {
   }
 }
 
-function getOrCreateMonthSpreadsheet(month) {
-  var props = PropertiesService.getScriptProperties();
-  var key = 'ss_' + month;
-  var id = props.getProperty(key);
-
-  if (id) {
-    try {
-      return SpreadsheetApp.openById(id);
-    } catch (err) {
-      // Previously this fell through and CREATED A SECOND SPREADSHEET,
-      // overwriting the cached ID. openById also throws on transient Drive
-      // 500s and rate limits, so a momentary blip mid-month orphaned the first
-      // half of the month's data. Recreating storage is too destructive to
-      // trigger on an ambiguous signal — fail the request instead.
-      logErr('openById failed for ' + key + ' (' + id + '): ' + err +
-             ' — NOT recreating. If the spreadsheet is genuinely gone, delete ' +
-             'the "' + key + '" script property by hand.');
-      throw new Error('spreadsheet_unavailable');
-    }
+// The month's spreadsheet and JD folder are found BY NAME inside the root
+// folder, not by a cached ID. The cached-ID scheme (ss_YYYY-MM, jd_folder_YYYY-MM
+// Script Properties) failed in both directions: a stale or foreign ID made every
+// write fail, and a deleted property made the script silently create a second
+// "Jobs-YYYY-MM" next to the first (30 Sep / 1 Oct 2026). Looking up by name
+// needs no state to drift. Called only under the script lock (see doPost), so
+// two requests cannot both decide "missing" and each create one. Several
+// non-trashed matches: use the OLDEST and log it, so a stray duplicate can never
+// win over the original.
+function oldestLive(it, what, mimeType) {
+  var best = null, n = 0;
+  while (it.hasNext()) {
+    var x = it.next();
+    if (x.isTrashed()) continue;
+    if (mimeType && x.getMimeType() !== mimeType) continue;
+    n++;
+    if (!best || x.getDateCreated() < best.getDateCreated()) best = x;
   }
+  if (n > 1) logErr('duplicate ' + what + ' (' + n + ' live copies) - using the oldest');
+  return best;
+}
 
-  var ss = SpreadsheetApp.create('Jobs-' + month);
-  DriveApp.getFileById(ss.getId()).moveTo(getRootFolder());
-  props.setProperty(key, ss.getId());
+function getOrCreateMonthSpreadsheet(month) {
+  var root = getRootFolder();
+  var name = 'Jobs-' + month;
+  var found = oldestLive(root.getFilesByName(name), 'spreadsheet ' + name,
+                         MimeType.GOOGLE_SHEETS);
+  // If openById throws (transient Drive error), the request fails; nothing is
+  // created on an ambiguous signal.
+  if (found) return SpreadsheetApp.openById(found.getId());
+
+  var ss = SpreadsheetApp.create(name);
+  DriveApp.getFileById(ss.getId()).moveTo(root);
   return ss;
 }
 
@@ -540,33 +555,14 @@ function removeDefaultStubSheet(ss, keepName) {
 }
 
 function getJdFolder(month, createIfMissing) {
-  var props = PropertiesService.getScriptProperties();
-  var key = 'jd_folder_' + month;
-  var id = props.getProperty(key);
-
-  if (id) {
-    try {
-      return DriveApp.getFolderById(id);
-    } catch (err) {
-      // Same reasoning as getOrCreateMonthSpreadsheet: falling through here
-      // created a SECOND archive folder and silently broke the
-      // get-or-update-by-name idempotency — every file re-created instead of
-      // updated, older files invisible.
-      logErr('getFolderById failed for ' + key + ' (' + id + '): ' + err +
-             ' — NOT recreating. If the folder is genuinely gone, delete the "' +
-             key + '" script property by hand.');
-      throw new Error('jd_folder_unavailable');
-    }
-  }
-
+  var root = getRootFolder();
+  var name = 'JD-' + month;
+  var found = oldestLive(root.getFoldersByName(name), 'folder ' + name);
+  if (found) return found;
   if (!createIfMissing) return null;
-
-  // Nested under the root folder (see getRootFolder) rather than
-  // created at My Drive's top level, so every JD-YYYY-MM folder lands next to
-  // its month's spreadsheet.
-  var folder = getRootFolder().createFolder('JD-' + month);
-  props.setProperty(key, folder.getId());
-  return folder;
+  // Nested under the root folder rather than created at My Drive's top level,
+  // so every JD-YYYY-MM folder lands next to its month's spreadsheet.
+  return root.createFolder(name);
 }
 
 // ── Diagnostics ─────────────────────────────────────────────────────────────
